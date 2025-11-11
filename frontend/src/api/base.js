@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Base API configuration
 const api = axios.create({
-  baseURL: '/api', // This will proxy to http://localhost:5000/api
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://xzoombackend.onrender.com/api',
 });
 
 // Add token to all requests
@@ -15,6 +15,18 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for handling errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );
