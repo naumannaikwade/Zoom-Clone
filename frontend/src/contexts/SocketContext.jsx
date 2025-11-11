@@ -16,12 +16,14 @@ export const SocketProvider = ({ children, meetingId, user }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000', {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://xzoombackend.onrender.com';
+    const newSocket = io(socketUrl, {
       auth: {
         token: localStorage.getItem('token'),
         meetingId,
         user
-      }
+      },
+      transports: ['websocket', 'polling'] // Important for production
     });
 
     newSocket.on('connect', () => {
@@ -44,30 +46,9 @@ export const SocketProvider = ({ children, meetingId, user }) => {
       setIsConnected(false);
     });
 
-    // WebRTC signaling events
-    newSocket.on('user-joined', (data) => {
-      console.log('👤 User joined:', data);
-      // This will be handled by MeetingContext
-    });
-
-    newSocket.on('user-left', (data) => {
-      console.log('👤 User left:', data);
-      // This will be handled by MeetingContext
-    });
-
-    newSocket.on('signal-offer', (data) => {
-      console.log('📨 Received offer from:', data.fromUser.name);
-      // This will be handled by MeetingContext
-    });
-
-    newSocket.on('signal-answer', (data) => {
-      console.log('📨 Received answer from:', data.fromUser.name);
-      // This will be handled by MeetingContext
-    });
-
-    newSocket.on('signal-ice', (data) => {
-      console.log('🧊 Received ICE candidate');
-      // This will be handled by MeetingContext
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', error);
+      setIsConnected(false);
     });
 
     setSocket(newSocket);
