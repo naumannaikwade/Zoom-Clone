@@ -48,7 +48,7 @@ const Login = () => {
           <p>Create a meeting, share its code, and talk with your team from the browser.</p>
         </div>
 
-        <p className="auth-capabilities">Video and audio ? Screen sharing ? Meeting chat</p>
+        <p className="auth-capabilities">Video and audio · Screen sharing · Meeting chat</p>
       </section>
 
       <main className="auth-form-panel">
@@ -91,7 +91,7 @@ const Login = () => {
             </div>
 
             <button className="primary-action" type="submit" disabled={loading}>
-              {loading ? <><span className="button-spinner" aria-hidden="true" />Signing in?</> : 'Sign in'}
+              {loading ? <><span className="button-spinner" aria-hidden="true" />Signing in…</> : 'Sign in'}
             </button>
           </form>
         </div>

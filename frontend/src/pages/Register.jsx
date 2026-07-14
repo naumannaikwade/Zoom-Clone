@@ -77,7 +77,7 @@ const Register = () => {
           <p>Create an account to start meetings and keep a list of the meetings you create.</p>
         </div>
 
-        <p className="auth-capabilities">Create ? Join ? Meet</p>
+        <p className="auth-capabilities">Create · Join · Meet</p>
       </section>
 
       <main className="auth-form-panel">
@@ -121,7 +121,7 @@ const Register = () => {
             </div>
 
             <button className="primary-action" type="submit" disabled={loading}>
-              {loading ? <><span className="button-spinner" aria-hidden="true" />Creating account?</> : 'Create account'}
+              {loading ? <><span className="button-spinner" aria-hidden="true" />Creating account…</> : 'Create account'}
             </button>
           </form>
         </div>

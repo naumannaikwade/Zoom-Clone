@@ -22,8 +22,8 @@ const features = [
 // Local development
 // const appUrl = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
-// Render deployment
-const appUrl = import.meta.env.VITE_APP_URL || 'https://xzoomfrontend.onrender.com';
+// Vercel deployment
+const appUrl = import.meta.env.VITE_APP_URL || 'https://xzoom.vercel.app';
 const registerUrl = new URL('/register', appUrl).toString();
 const loginUrl = new URL('/login', appUrl).toString();
 

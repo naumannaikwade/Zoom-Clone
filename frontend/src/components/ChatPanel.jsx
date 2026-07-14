@@ -61,7 +61,7 @@ const ChatPanel = () => {
               <div className="chat-message-meta">
                 <strong className={chatMessage.sender?.isHost ? 'is-host' : ''}>
                   {chatMessage.sender?.name || chatMessage.senderName || 'Participant'}
-                  {chatMessage.sender?.isHost && ' ? Host'}
+                  {chatMessage.sender?.isHost && ' · Host'}
                 </strong>
                 <time>{formatTime(chatMessage.timestamp)}</time>
               </div>

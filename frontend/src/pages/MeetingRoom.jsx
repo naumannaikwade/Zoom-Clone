@@ -320,7 +320,7 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                                         <p>Camera is off</p>
                                     </div>
                                 )}
-                                <div className="prejoin-preview-label">{user?.name || 'Guest'} ? You</div>
+                                <div className="prejoin-preview-label">{user?.name || 'Guest'} · You</div>
                                 <div className="prejoin-device-controls">
                                     <button
                                         type="button"
@@ -364,7 +364,7 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                             <button className="prejoin-primary" type="button" onClick={enterMeeting}>Join meeting</button>
                         ) : (
                             <button className="prejoin-primary" type="button" onClick={requestMediaPermission} disabled={isPreparingMedia}>
-                                {isPreparingMedia ? 'Preparing devices?' : 'Set up audio and video'}
+                                {isPreparingMedia ? 'Preparing devices…' : 'Set up audio and video'}
                             </button>
                         )}
 
@@ -545,12 +545,12 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                                         </div>
                                     )}
                                     <div className="participant-meta solo-name">
-                                        <span>{user?.name || 'Guest'} ? You</span>
+                                        <span>{user?.name || 'Guest'} · You</span>
                                         {isHost && <span className="participant-badge">Host</span>}
                                     </div>
                                     <div className="solo-invite">
                                         <div>
-                                            <strong>You?re the only one here</strong>
+                                            <strong>You’re the only one here</strong>
                                             <span>Invite someone with the meeting ID.</span>
                                         </div>
                                         <div>

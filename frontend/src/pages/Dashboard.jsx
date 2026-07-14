@@ -96,7 +96,7 @@ const Dashboard = () => {
         {(error || message) && (
           <div className={`dashboard-notice ${error ? 'is-error' : ''}`} role={error ? 'alert' : 'status'}>
             <span>{error || message}</span>
-            <button type="button" onClick={() => { setError(''); setMessage(''); }} aria-label="Dismiss message">?</button>
+            <button type="button" onClick={() => { setError(''); setMessage(''); }} aria-label="Dismiss message">×</button>
           </div>
         )}
 
@@ -120,7 +120,7 @@ const Dashboard = () => {
                 placeholder="Quick Meeting"
               />
               <button className="primary-action" type="button" onClick={createMeeting} disabled={loading}>
-                {loading ? <><span className="button-spinner" aria-hidden="true" />Creating?</> : 'Create meeting'}
+                {loading ? <><span className="button-spinner" aria-hidden="true" />Creating…</> : 'Create meeting'}
               </button>
             </div>
           </article>
