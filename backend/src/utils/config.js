@@ -1,18 +1,18 @@
 const DEFAULT_ORIGINS = [
+  "https://xzoom.vercel.app",
   "http://localhost:3000",
   "http://localhost:5173",
 ];
 
 const parseAllowedOrigins = (value) => {
-  if (!value) {
-    return DEFAULT_ORIGINS;
-  }
-
   return [...new Set(
-    value
-      .split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean)
+    [
+      ...DEFAULT_ORIGINS,
+      ...String(value || "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ]
   )];
 };
 
