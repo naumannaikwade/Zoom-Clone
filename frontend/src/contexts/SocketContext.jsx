@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import io from 'socket.io-client';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
+import { SOCKET_URL } from '../config/endpoints';
 
 const SocketContext = createContext();
 
@@ -11,55 +12,43 @@ export const useSocket = () => {
   return context;
 };
 
-export const SocketProvider = ({ children, meetingId, user }) => {
+export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
 
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://xzoombackend.onrender.com';
-    const newSocket = io(socketUrl, {
-      auth: {
-        token: localStorage.getItem('token'),
-        meetingId,
-        user
-      },
-      transports: ['websocket', 'polling'] // Important for production
+    const newSocket = io(SOCKET_URL, {
+      auth: { token: localStorage.getItem('token') },
+      transports: ['websocket', 'polling'],
     });
 
-    newSocket.on('connect', () => {
-      console.log('✅ Connected to server');
+    const handleConnect = () => {
       setIsConnected(true);
-      
-      // Join the meeting room
-      newSocket.emit('join-room', {
-        meetingId,
-        user: {
-          id: user?._id,
-          name: user?.name,
-          isGuest: !user
-        }
-      });
-    });
+      setConnectionError('');
+    };
 
-    newSocket.on('disconnect', () => {
-      console.log('❌ Disconnected from server');
+    const handleDisconnect = () => setIsConnected(false);
+    const handleConnectionError = (error) => {
       setIsConnected(false);
-    });
+      setConnectionError(error.message || 'Unable to connect to the meeting server');
+    };
 
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ Socket connection error:', error);
-      setIsConnected(false);
-    });
-
+    newSocket.on('connect', handleConnect);
+    newSocket.on('disconnect', handleDisconnect);
+    newSocket.on('connect_error', handleConnectionError);
     setSocket(newSocket);
 
     return () => {
+      newSocket.off('connect', handleConnect);
+      newSocket.off('disconnect', handleDisconnect);
+      newSocket.off('connect_error', handleConnectionError);
       newSocket.disconnect();
     };
-  }, [meetingId, user]);
+  }, []);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>
+    <SocketContext.Provider value={{ socket, isConnected, connectionError }}>
       {children}
     </SocketContext.Provider>
   );

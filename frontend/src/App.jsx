@@ -4,14 +4,14 @@ import { AuthProvider } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import MeetingRoom from './pages/MeetingRoom'; // Now this exists!
+import MeetingRoom from './pages/MeetingRoom';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
+        <div>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />

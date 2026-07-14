@@ -9,12 +9,10 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        fromDatabase:
-          name: video-conferencing-db
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRE
         value: 7d
       - key: CORS_ORIGIN
-        value: https://your-frontend-app.onrender.com
+        sync: false

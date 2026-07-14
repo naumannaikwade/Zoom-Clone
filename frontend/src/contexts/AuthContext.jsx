@@ -26,7 +26,7 @@ export const AuthProvider=({children})=>{
                 const response=await authAPI.getMe();
                 setUser(response.data.data);
             }
-        } catch(error){
+        } catch {
             localStorage.removeItem("token");
 
         } finally {

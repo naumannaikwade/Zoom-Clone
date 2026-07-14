@@ -30,25 +30,31 @@ const MeetingRoom = () => {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        loadMeeting();
-    }, [meetingId]);
+        let active = true;
 
-    const loadMeeting = async () => {
-        try {
-            const response = await meetingsAPI.getMeeting(meetingId);
-            setMeeting(response.data.data);
-        } catch (err) {
-            setError('Meeting not found or has ended');
-            console.error('Failed to load meeting:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+        const loadMeeting = async () => {
+            try {
+                const response = await meetingsAPI.getMeeting(meetingId);
+                if (active) setMeeting(response.data.data);
+            } catch (requestError) {
+                if (active) {
+                    setError(requestError.response?.data?.message || 'Meeting is unavailable');
+                }
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        loadMeeting();
+        return () => {
+            active = false;
+        };
+    }, [meetingId]);
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#232333] flex items-center justify-center">
-                <div className="text-white text-center">
+            <div className="meeting-entry-page min-h-screen bg-[#232333] flex items-center justify-center">
+                <div className="meeting-state text-white text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2d8cff] mx-auto mb-4"></div>
                     <p className="text-[#747487]">Loading meeting...</p>
                 </div>
@@ -58,8 +64,8 @@ const MeetingRoom = () => {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-[#232333] flex items-center justify-center">
-                <div className="text-white text-center max-w-md mx-4">
+            <div className="meeting-entry-page min-h-screen bg-[#232333] flex items-center justify-center">
+                <div className="meeting-entry-card meeting-state text-white text-center max-w-md mx-4">
                     <div className="w-16 h-16 bg-[#f26d21] rounded-full flex items-center justify-center mx-auto mb-4">
                         <FontAwesomeIcon icon={faPowerOff} className="text-white text-2xl" />
                     </div>
@@ -77,7 +83,7 @@ const MeetingRoom = () => {
     }
 
     return (
-        <SocketProvider meetingId={meetingId} user={user}>
+        <SocketProvider>
             <MeetingProvider meetingId={meetingId} user={user}>
                 <MeetingRoomContent
                     meeting={meeting}
@@ -109,13 +115,30 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
         leaveMeeting,
         endMeeting,
         isChatOpen,
-        unreadMessages
+        unreadMessages,
+        connectionError
     } = useMeeting();
 
     const [permissionDenied, setPermissionDenied] = useState(false);
+    const [previewStream, setPreviewStream] = useState(null);
+    const [isPreparingMedia, setIsPreparingMedia] = useState(false);
+    const [previewAudioEnabled, setPreviewAudioEnabled] = useState(true);
+    const [previewVideoEnabled, setPreviewVideoEnabled] = useState(true);
     const [deviceType, setDeviceType] = useState('desktop');
     const navigate = useNavigate();
     const remoteVideoRefs = useRef(new Map());
+    const previewVideoRef = useRef(null);
+    const previewStreamRef = useRef(null);
+
+    useEffect(() => {
+        if (previewVideoRef.current && previewStream) {
+            previewVideoRef.current.srcObject = previewStream;
+        }
+    }, [previewStream]);
+
+    useEffect(() => () => {
+        previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+    }, []);
 
     // UPDATED: Corrected device detection with 770px breakpoint
     useEffect(() => {
@@ -138,25 +161,14 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
         };
     }, []);
 
-    // Set host status based on meeting data
-    useEffect(() => {
-        if (meeting && user) {
-            const userIsHost = meeting.hostId === user._id;
-            if (userIsHost) {
-                console.log('👑 User is the host of this meeting');
-            }
-        }
-    }, [meeting, user]);
-
     const requestMediaPermission = async () => {
         try {
             setPermissionDenied(false);
+            setIsPreparingMedia(true);
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Browser does not support camera/microphone access');
             }
-
-            console.log('Requesting camera and microphone permissions...');
 
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
@@ -169,11 +181,12 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                 }
             });
 
-            setLocalStream(stream);
-            console.log('✅ Permissions granted!');
-
+            previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+            previewStreamRef.current = stream;
+            setPreviewStream(stream);
+            setPreviewAudioEnabled(stream.getAudioTracks()[0]?.enabled ?? false);
+            setPreviewVideoEnabled(stream.getVideoTracks()[0]?.enabled ?? false);
         } catch (err) {
-            console.error('❌ Permission denied:', err);
             setPermissionDenied(true);
 
             if (err.name === 'NotAllowedError') {
@@ -182,7 +195,27 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
             } else {
                 alert('Could not access camera/microphone: ' + err.message);
             }
+        } finally {
+            setIsPreparingMedia(false);
         }
+    };
+
+    const togglePreviewTrack = (kind) => {
+        const track = kind === 'audio'
+            ? previewStream?.getAudioTracks()[0]
+            : previewStream?.getVideoTracks()[0];
+
+        if (!track) return;
+        track.enabled = !track.enabled;
+
+        if (kind === 'audio') setPreviewAudioEnabled(track.enabled);
+        if (kind === 'video') setPreviewVideoEnabled(track.enabled);
+    };
+
+    const enterMeeting = () => {
+        if (!previewStream) return;
+        previewStreamRef.current = null;
+        setLocalStream(previewStream);
     };
 
     const copyMeetingId = () => {
@@ -198,8 +231,8 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                     text: 'Join my video meeting',
                     url: window.location.href,
                 });
-            } catch (err) {
-                console.log('Share cancelled');
+            } catch {
+                // The user cancelled the native share dialog.
             }
         } else {
             copyMeetingId();
@@ -236,14 +269,14 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                 };
             default: // desktop
                 return {
-                    selfVideo: { width: 200, height: 150 },
+                    selfVideo: { width: 210, height: 142 },
                     remoteVideo: {
                         width: '100%',
                         height: '100%'
                     },
                     gridCols: totalParticipants <= 4 ? `grid-cols-${Math.min(2, totalParticipants)}` : 'grid-cols-3',
-                    containerWidth: '825px',
-                    containerHeight: '525px'
+                    containerWidth: 'min(100%, 1120px)',
+                    containerHeight: 'min(72vh, 680px)'
                 };
         }
     };
@@ -270,43 +303,81 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
     // Show join screen if no permissions yet
     if (!localStream && !permissionDenied) {
         return (
-            <div className="min-h-screen bg-[#232333] flex items-center justify-center p-4">
-                <div className="text-white text-center max-w-md">
-                    <div className="w-20 h-20 bg-[#2d8cff] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                        <FontAwesomeIcon icon={faVideo} className="text-white text-3xl" />
-                    </div>
-                    <h1 className="text-3xl font-bold mb-2 text-white">Join Meeting</h1>
-                    <p className="text-[#747487] text-lg mb-2">{meeting?.title || 'Quick Meeting'}</p>
-                    <p className="text-[#747487] text-sm mb-8">ID: {meetingId}</p>
+            <div className="prejoin-page">
+                <header className="prejoin-header">
+                    <img src="/xzoom-logo-dark.svg" alt="XZoom" />
+                    <button type="button" onClick={() => navigate('/')}>Back to dashboard</button>
+                </header>
 
-                    <button
-                        onClick={requestMediaPermission}
-                        className="w-full bg-[#2d8cff] hover:bg-[#1a7ae8] text-white px-6 py-4 rounded-xl text-lg font-semibold transition-all duration-200 transform hover:scale-[1.02] mb-4"
-                    >
-                        Join with Audio & Video
-                    </button>
+                <main className="prejoin-layout">
+                    <section className="prejoin-preview" aria-label="Camera preview">
+                        {previewStream ? (
+                            <>
+                                <video ref={previewVideoRef} autoPlay playsInline muted />
+                                {!previewVideoEnabled && (
+                                    <div className="camera-off-state">
+                                        <span>{(user?.name || 'Guest').charAt(0).toUpperCase()}</span>
+                                        <p>Camera is off</p>
+                                    </div>
+                                )}
+                                <div className="prejoin-preview-label">{user?.name || 'Guest'} ? You</div>
+                                <div className="prejoin-device-controls">
+                                    <button
+                                        type="button"
+                                        className={!previewAudioEnabled ? 'is-off' : ''}
+                                        onClick={() => togglePreviewTrack('audio')}
+                                        aria-label={previewAudioEnabled ? 'Mute preview microphone' : 'Unmute preview microphone'}
+                                    >
+                                        <FontAwesomeIcon icon={previewAudioEnabled ? faMicrophone : faMicrophoneSlash} />
+                                        <span>{previewAudioEnabled ? 'Mute' : 'Unmute'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={!previewVideoEnabled ? 'is-off' : ''}
+                                        onClick={() => togglePreviewTrack('video')}
+                                        aria-label={previewVideoEnabled ? 'Turn off preview camera' : 'Turn on preview camera'}
+                                    >
+                                        <FontAwesomeIcon icon={previewVideoEnabled ? faVideo : faVideoSlash} />
+                                        <span>{previewVideoEnabled ? 'Stop video' : 'Start video'}</span>
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="prejoin-placeholder">
+                                <span><FontAwesomeIcon icon={faVideo} /></span>
+                                <h2>Check your camera and microphone</h2>
+                                <p>You can choose what stays on before entering.</p>
+                            </div>
+                        )}
+                    </section>
 
-                    <div className="flex space-x-3 mb-6">
-                        <button
-                            onClick={copyMeetingId}
-                            className="flex-1 bg-[#747487] hover:bg-[#5a5a6c] text-white px-4 py-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-                        >
+                    <section className="prejoin-details" aria-labelledby="prejoin-title">
+                        <p className="prejoin-kicker">Ready to join?</p>
+                        <h1 id="prejoin-title">{meeting?.title || 'Quick Meeting'}</h1>
+                        <button className="prejoin-meeting-id" type="button" onClick={copyMeetingId}>
+                            <span>{meetingId}</span>
                             <FontAwesomeIcon icon={faCopy} />
-                            <span>Copy ID</span>
+                            <span className="sr-only">Copy meeting ID</span>
                         </button>
-                        <button
-                            onClick={shareMeeting}
-                            className="flex-1 bg-[#f26d21] hover:bg-[#da5d17] text-white px-4 py-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-                        >
-                            <FontAwesomeIcon icon={faShare} />
-                            <span>Share</span>
-                        </button>
-                    </div>
 
-                    <p className="text-[#747487] text-sm">
-                        You'll be asked to allow camera and microphone access
-                    </p>
-                </div>
+                        {previewStream ? (
+                            <button className="prejoin-primary" type="button" onClick={enterMeeting}>Join meeting</button>
+                        ) : (
+                            <button className="prejoin-primary" type="button" onClick={requestMediaPermission} disabled={isPreparingMedia}>
+                                {isPreparingMedia ? 'Preparing devices?' : 'Set up audio and video'}
+                            </button>
+                        )}
+
+                        <button className="prejoin-secondary" type="button" onClick={shareMeeting}>
+                            <FontAwesomeIcon icon={faShare} />
+                            Share meeting
+                        </button>
+
+                        <p className="prejoin-note">
+                            {previewStream ? 'Your settings can also be changed inside the meeting.' : 'Your browser will ask for camera and microphone permission.'}
+                        </p>
+                    </section>
+                </main>
             </div>
         );
     }
@@ -314,8 +385,8 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
     // Show permission denied screen
     if (permissionDenied) {
         return (
-            <div className="min-h-screen bg-[#232333] flex items-center justify-center p-4">
-                <div className="text-white text-center max-w-md">
+            <div className="meeting-entry-page min-h-screen bg-[#232333] flex items-center justify-center p-4">
+                <div className="meeting-entry-card text-white text-center max-w-md">
                     <div className="w-16 h-16 bg-[#f26d21] rounded-full flex items-center justify-center mx-auto mb-6">
                         <FontAwesomeIcon icon={faVideoSlash} className="text-white text-2xl" />
                     </div>
@@ -357,71 +428,57 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
     }
 
     return (
-        <div className="min-h-screen bg-[#232333] flex flex-col">
-            {/* UPDATED: Better mobile header */}
-            <header className="bg-[#2d2d44] text-white p-3 sm:p-4 shadow-lg">
-                <div className="container mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
-                    <div className="flex items-center space-x-2 sm:space-x-3">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#2d8cff] rounded-xl flex items-center justify-center shadow-md">
-                            <FontAwesomeIcon icon={faVideo} className="text-white text-sm sm:text-base" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h1 className="text-sm sm:text-lg font-bold text-white truncate">
-                                {meeting?.title || 'Meeting'}
-                            </h1>
-                            <div className="flex items-center space-x-2 text-xs sm:text-sm text-[#747487]">
-                                <span className="truncate">ID: {meetingId}</span>
-                                <button
-                                    onClick={copyMeetingId}
-                                    className="hover:text-[#2d8cff] transition-colors duration-200 flex-shrink-0"
-                                    title="Copy meeting ID"
-                                >
-                                    <FontAwesomeIcon icon={faCopy} className="text-xs" />
-                                </button>
-                            </div>
+        <div className="meeting-room min-h-screen bg-[#232333] flex flex-col">
+            <header className="meeting-room-header bg-[#2d2d44] text-white p-3 sm:p-4 shadow-lg">
+                <div className="meeting-room-header-inner">
+                    <div className="meeting-title-group">
+                        <img className="meeting-brand-logo" src="/xzoom-mark.svg" alt="XZoom" />
+                        <div>
+                            <h1>{meeting?.title || 'Meeting'}</h1>
+                            <p>{isHost ? 'You are the host' : 'XZoom meeting'}</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto justify-between sm:justify-normal">
-                        <div className="text-right sm:text-right">
-                            <div className="flex items-center space-x-2 text-xs sm:text-sm">
-                                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#2d8cff] rounded-full flex items-center justify-center text-white text-xs font-medium">
-                                    {user?.name?.charAt(0)?.toUpperCase()}
-                                </div>
-                                <span className="text-white text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{user?.name}</span>
-                                {isHost && <span className="bg-[#f26d21] text-white px-1 sm:px-2 py-0.5 sm:py-1 rounded text-xs flex-shrink-0">Host</span>}
-                            </div>
-                            <div className="text-xs text-[#747487] mt-1">
-                                {participants.length + 1} participant{participants.length + 1 !== 1 ? 's' : ''}
-                                {activeScreenSharer && ' • Sharing'}
-                            </div>
+                    <div className="meeting-header-actions">
+                        <button className="meeting-id-chip" type="button" onClick={copyMeetingId} title="Copy meeting ID">
+                            <span>{meetingId}</span>
+                            <FontAwesomeIcon icon={faCopy} />
+                        </button>
+                        <div className="participant-count" title="Participants in meeting">
+                            <FontAwesomeIcon icon={faUser} />
+                            <span>{participants.length + 1}</span>
+                        </div>
+                        <div className="meeting-user" title={user?.name || 'Guest'}>
+                            {(user?.name || 'Guest').charAt(0).toUpperCase()}
                         </div>
                     </div>
                 </div>
             </header>
 
+            {connectionError && (
+                <div className="meeting-alert" role="alert">
+                    {connectionError}
+                </div>
+            )}
+
             {/* Screen Share Indicator */}
             {activeScreenSharer && (
-                <div className="bg-[#2d8cff] text-white p-2 sm:p-3 mx-2 sm:mx-4 mt-2 rounded-lg shadow-md">
-                    <div className="flex items-center justify-center space-x-2 text-xs sm:text-sm">
+                <div className="sharing-banner" role="status">
+                    <div>
                         <FontAwesomeIcon icon={faDesktop} />
-                        <span className="text-center">
+                        <span>
                             <strong>{activeScreenSharer.user.name}</strong> is sharing screen
                         </span>
-                        {activeScreenSharer.user.isHost && (
-                            <span className="bg-[#f26d21] text-white px-1 sm:px-2 py-0.5 rounded text-xs ml-1 sm:ml-2">Host</span>
-                        )}
                     </div>
                 </div>
             )}
 
-            {/* UPDATED: Better mobile layout */}
-            <div className={`flex-1 ${deviceType === 'mobile' ? 'flex flex-col' : 'flex'}`}>
+            <div className={`meeting-content flex-1 ${deviceType === 'mobile' ? 'flex flex-col' : 'flex'} ${isChatOpen ? 'has-chat' : ''}`}>
                 {/* Video Container */}
-                <div className={`${deviceType === 'mobile' ? 'flex-1' : 'flex-1'} relative p-2 sm:p-4`}>
+                <div className={`meeting-stage ${deviceType === 'mobile' ? 'flex-1' : 'flex-1'} relative p-2 sm:p-4`}>
                     <div className="w-full h-full flex justify-center items-center">
                         <div 
-                            className="relative bg-[#1a1a2a] rounded-xl overflow-hidden shadow-2xl"
+                            className="meeting-video-frame relative bg-[#1a1a2a] rounded-xl overflow-hidden shadow-2xl"
                             style={{
                                 width: videoSizes.containerWidth,
                                 height: deviceType === 'mobile' ? '70vh' : videoSizes.containerHeight,
@@ -431,15 +488,15 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                         >
                             {/* Remote Videos Grid */}
                             {hasRemoteParticipants ? (
-                                <div className={`grid ${getResponsiveGridCols()} gap-2 sm:gap-3 lg:gap-4 h-full w-full`}>
+                                <div className={`participant-grid grid ${getResponsiveGridCols()} h-full w-full`}>
                                     {Array.from(remoteStreams).map(([socketId, stream]) => {
                                         const participant = participants.find(p => p.socketId === socketId);
                                         const isSharingScreen = activeScreenSharer?.socketId === socketId;
 
                                         return (
-                                            <div
+                                            <article
                                                 key={socketId}
-                                                className="bg-[#2d2d44] rounded-xl overflow-hidden relative shadow-lg"
+                                                className="participant-tile"
                                                 style={{
                                                     height: videoSizes.remoteVideo.height,
                                                     minHeight: deviceType === 'mobile' ? '180px' : '200px'
@@ -458,63 +515,60 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                                                     playsInline
                                                     className="w-full h-full object-cover"
                                                 />
-                                                <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 bg-black bg-opacity-60 text-white px-2 py-1 sm:px-3 sm:py-2 rounded-lg text-xs sm:text-sm backdrop-blur-sm">
-                                                    <div className="flex items-center space-x-1 sm:space-x-2">
-                                                        <span className="font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">
-                                                            {participant?.name || 'Remote User'}
-                                                        </span>
-                                                        {participant?.isHost && (
-                                                            <span className="bg-[#f26d21] text-white px-1 sm:px-2 py-0.5 rounded text-xs flex-shrink-0">Host</span>
-                                                        )}
-                                                        {isSharingScreen && (
-                                                            <span className="bg-[#2d8cff] text-white px-1 sm:px-2 py-0.5 rounded text-xs flex-shrink-0">Sharing</span>
-                                                        )}
-                                                    </div>
+                                                <div className="participant-meta">
+                                                    <span>{participant?.name || 'Remote user'}</span>
+                                                    {participant?.isHost && <span className="participant-badge">Host</span>}
+                                                    {isSharingScreen && <span className="participant-badge is-sharing">Sharing</span>}
                                                 </div>
-                                                <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-black bg-opacity-60 rounded-full p-1 sm:p-2">
-                                                    <FontAwesomeIcon icon={faMicrophone} className="text-green-400 text-xs" />
+                                                <div className="participant-mic" title="Microphone on">
+                                                    <FontAwesomeIcon icon={faMicrophone} />
                                                 </div>
-                                            </div>
+                                            </article>
                                         );
                                     })}
                                 </div>
                             ) : (
-                                // No Participants State
-                                <div className="w-full h-full flex justify-center items-center content-center">
-                                    <div className="text-center text-[#747487] max-w-md mx-4">
-                                        <div className="w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 bg-[#2d2d44] rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                                            <FontAwesomeIcon icon={faUser} className="text-xl sm:text-2xl lg:text-3xl" />
+                                <div className="solo-stage">
+                                    <video
+                                        ref={(video) => {
+                                            localVideoRef.current = video;
+                                            if (video && localStream) video.srcObject = localStream;
+                                        }}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                    />
+                                    {!isVideoEnabled && (
+                                        <div className="camera-off-state">
+                                            <span>{(user?.name || 'Guest').charAt(0).toUpperCase()}</span>
+                                            <p>Camera is off</p>
                                         </div>
-                                        <h3 className="text-base sm:text-lg lg:text-xl font-medium text-white mb-2">Waiting for participants</h3>
-                                        <p className="text-xs sm:text-sm mb-3 sm:mb-4 lg:mb-6">Share this meeting ID to invite others</p>
-                                        <div className="flex justify-center space-x-2 sm:space-x-3">
-                                            <button
-                                                onClick={copyMeetingId}
-                                                className="bg-[#2d8cff] hover:bg-[#1a7ae8] text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm"
-                                            >
-                                                <FontAwesomeIcon icon={faCopy} />
-                                                <span>Copy ID</span>
-                                            </button>
-                                            <button
-                                                onClick={shareMeeting}
-                                                className="bg-[#f26d21] hover:bg-[#da5d17] text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm"
-                                            >
-                                                <FontAwesomeIcon icon={faShare} />
-                                                <span>Share</span>
-                                            </button>
+                                    )}
+                                    <div className="participant-meta solo-name">
+                                        <span>{user?.name || 'Guest'} ? You</span>
+                                        {isHost && <span className="participant-badge">Host</span>}
+                                    </div>
+                                    <div className="solo-invite">
+                                        <div>
+                                            <strong>You?re the only one here</strong>
+                                            <span>Invite someone with the meeting ID.</span>
+                                        </div>
+                                        <div>
+                                            <button type="button" onClick={copyMeetingId}><FontAwesomeIcon icon={faCopy} /> Copy ID</button>
+                                            <button type="button" onClick={shareMeeting}><FontAwesomeIcon icon={faShare} /> Share</button>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* Self Video */}
-                            {localStream && (
+                            {localStream && hasRemoteParticipants && (
                                 <div
                                     className={`absolute ${
                                         deviceType === 'mobile' 
                                             ? 'bottom-3 right-3' 
                                             : 'bottom-4 right-4'
-                                    } bg-[#2d2d44] rounded-lg overflow-hidden shadow-lg border-2 border-white/20`}
+                                    } self-video-tile`}
                                     style={{
                                         width: `${videoSizes.selfVideo.width}px`,
                                         height: `${videoSizes.selfVideo.height}px`,
@@ -522,24 +576,27 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                                     }}
                                 >
                                     <video
-                                        ref={localVideoRef}
+                                        ref={(video) => {
+                                            localVideoRef.current = video;
+                                            if (video && localStream) video.srcObject = localStream;
+                                        }}
                                         autoPlay
                                         playsInline
                                         muted
                                         className="w-full h-full object-cover"
                                     />
-                                    <div className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 bg-black bg-opacity-60 text-white px-1 py-0.5 sm:px-2 sm:py-1 rounded text-xs backdrop-blur-sm">
-                                        <div className="flex items-center space-x-1">
-                                            <span className="font-medium text-xs">You</span>
-                                            {isHost && (
-                                                <span className="bg-[#f26d21] text-white px-1 py-0.5 rounded text-xs">Host</span>
-                                            )}
+                                    {!isVideoEnabled && (
+                                        <div className="camera-off-state compact">
+                                            <span>{(user?.name || 'Guest').charAt(0).toUpperCase()}</span>
                                         </div>
+                                    )}
+                                    <div className="self-video-label">
+                                        <span>You</span>
+                                        {isHost && <span>Host</span>}
                                     </div>
-                                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-black bg-opacity-60 rounded-full p-1">
+                                    <div className={`self-audio-state ${isAudioEnabled ? '' : 'is-muted'}`}>
                                         <FontAwesomeIcon 
                                             icon={isAudioEnabled ? faMicrophone : faMicrophoneSlash} 
-                                            className={isAudioEnabled ? "text-green-400 text-xs" : "text-red-400 text-xs"} 
                                         />
                                     </div>
                                 </div>
@@ -553,71 +610,79 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
             </div>
 
             {/* UPDATED: Better mobile controls */}
-            <div className="bg-[#2d2d44] p-3 sm:p-4 border-t border-[#747487]/20">
-                <div className="max-w-4xl mx-auto">
-                    <div className="flex justify-center space-x-2 sm:space-x-3 lg:space-x-4 flex-wrap">
+            <div className="meeting-control-bar bg-[#2d2d44] p-3 sm:p-4 border-t border-[#747487]/20">
+                <div className="meeting-controls-wrap max-w-4xl mx-auto">
+                    <div className="meeting-controls flex justify-center space-x-2 sm:space-x-3 lg:space-x-4 flex-wrap">
                         {/* Audio Control */}
                         <button
                             onClick={toggleAudio}
-                            className={`p-3 sm:p-4 rounded-full transition-all duration-200 transform hover:scale-110 ${
+                            className={`meeting-control ${
                                 isAudioEnabled
-                                    ? 'bg-[#747487] hover:bg-[#5a5a6c] text-white'
-                                    : 'bg-[#f26d21] hover:bg-[#da5d17] text-white'
+                                    ? ''
+                                    : 'is-danger'
                             }`}
+                            aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'}
                             title={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'}
                         >
                             <FontAwesomeIcon 
                                 icon={isAudioEnabled ? faMicrophone : faMicrophoneSlash} 
                                 className="text-sm sm:text-base" 
                             />
+                            <span>{isAudioEnabled ? 'Mute' : 'Unmute'}</span>
                         </button>
 
                         {/* Video Control */}
                         <button
                             onClick={toggleVideo}
-                            className={`p-3 sm:p-4 rounded-full transition-all duration-200 transform hover:scale-110 ${
+                            className={`meeting-control ${
                                 isVideoEnabled
-                                    ? 'bg-[#747487] hover:bg-[#5a5a6c] text-white'
-                                    : 'bg-[#f26d21] hover:bg-[#da5d17] text-white'
+                                    ? ''
+                                    : 'is-danger'
                             }`}
+                            aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
                             title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
                         >
                             <FontAwesomeIcon 
                                 icon={isVideoEnabled ? faVideo : faVideoSlash} 
                                 className="text-sm sm:text-base" 
                             />
+                            <span>{isVideoEnabled ? 'Stop video' : 'Start video'}</span>
                         </button>
 
                         {/* Screen Share */}
                         <button
                             onClick={isScreenSharing ? stopScreenShare : startScreenShare}
-                            className={`p-3 sm:p-4 rounded-full transition-all duration-200 transform hover:scale-110 ${
+                            className={`meeting-control ${
                                 isScreenSharing
-                                    ? 'bg-[#f26d21] hover:bg-[#da5d17] text-white'
-                                    : 'bg-[#747487] hover:bg-[#5a5a6c] text-white'
+                                    ? 'is-active'
+                                    : ''
                             }`}
+                            aria-label={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
                             title={isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
                         >
                             <FontAwesomeIcon 
                                 icon={isScreenSharing ? faStop : faDesktop} 
                                 className="text-sm sm:text-base" 
                             />
+                            <span>{isScreenSharing ? 'Stop share' : 'Share'}</span>
                         </button>
 
                         {/* Chat Button with Notification Badge */}
                         <button
                             onClick={toggleChat}
-                            className={`p-3 sm:p-4 rounded-full transition-all duration-200 transform hover:scale-110 relative ${
+                            className={`meeting-control relative ${
                                 isChatOpen
-                                    ? 'bg-[#2d8cff] hover:bg-[#1a7ae8] text-white'
-                                    : 'bg-[#747487] hover:bg-[#5a5a6c] text-white'
+                                    ? 'is-active'
+                                    : ''
                             }`}
+                            aria-label={isChatOpen ? 'Close chat' : 'Open chat'}
                             title={isChatOpen ? 'Close chat' : 'Open chat'}
                         >
                             <FontAwesomeIcon 
                                 icon={faCommentDots} 
                                 className="text-sm sm:text-base" 
                             />
+                            <span>Chat</span>
                             
                             {/* Notification Badge - Only show when there are unread messages and chat is closed */}
                             {unreadMessages > 0 && !isChatOpen && (
@@ -631,39 +696,32 @@ const MeetingRoomContent = ({ meeting, meetingId, user }) => {
                         {isHost ? (
                             <button
                                 onClick={endMeeting}
-                                className="p-3 sm:p-4 rounded-full bg-[#f26d21] hover:bg-[#da5d17] text-white transition-all duration-200 transform hover:scale-110"
+                                className="meeting-control is-danger meeting-exit-control"
+                                aria-label="End meeting for everyone"
                                 title="End meeting for everyone"
                             >
                                 <FontAwesomeIcon 
                                     icon={faPowerOff} 
                                     className="text-sm sm:text-base" 
                                 />
+                                <span>End</span>
                             </button>
                         ) : (
                             <button
                                 onClick={leaveMeeting}
-                                className="p-3 sm:p-4 rounded-full bg-[#f26d21] hover:bg-[#da5d17] text-white transition-all duration-200 transform hover:scale-110"
+                                className="meeting-control is-danger meeting-exit-control"
+                                aria-label="Leave meeting"
                                 title="Leave meeting"
                             >
                                 <FontAwesomeIcon 
                                     icon={faPhoneSlash} 
                                     className="text-sm sm:text-base" 
                                 />
+                                <span>Leave</span>
                             </button>
                         )}
                     </div>
 
-                    {/* Status Bar */}
-                    <div className="text-center mt-3 sm:mt-4">
-                        <p className="text-xs text-[#747487] px-2">
-                            {isAudioEnabled ? 'Mic on' : 'Mic muted'} •
-                            {isVideoEnabled ? ' Cam on' : ' Cam off'} •
-                            {remoteStreams.size === 0
-                                ? ' No participants'
-                                : ` ${remoteStreams.size} participant${remoteStreams.size > 1 ? 's' : ''}`}
-                            {isHost && ' • You are host'}
-                        </p>
-                    </div>
                 </div>
             </div>
         </div>

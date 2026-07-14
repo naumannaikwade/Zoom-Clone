@@ -1,12 +1,24 @@
 const express = require('express');
 const Meeting = require('../models/Meeting');
 const { protect } = require('../middleware/auth');
+const {
+  createMeetingId,
+  isMeetingHost,
+  normalizeMeetingId,
+} = require('../utils/meeting');
 
 const router = express.Router();
 
-// Generate unique meeting ID
-const generateMeetingId = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+const generateUniqueMeetingId = async () => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const meetingId = createMeetingId();
+    const exists = await Meeting.exists({ meetingId });
+    if (!exists) {
+      return meetingId;
+    }
+  }
+
+  throw new Error('Unable to generate a unique meeting ID');
 };
 
 // @desc    Create a new meeting
@@ -14,12 +26,14 @@ const generateMeetingId = () => {
 // @access  Private
 router.post('/', protect, async (req, res) => {
   try {
-    const meetingId = generateMeetingId();
+    const meetingId = await generateUniqueMeetingId();
+    const title = String(req.body.title || 'Quick Meeting').trim().slice(0, 120);
     
     const meeting = await Meeting.create({
       meetingId,
       hostId: req.user.id,
-      title: req.body.title || 'Quick Meeting'
+      title: title || 'Quick Meeting',
+      startTime: new Date()
     });
 
     res.status(201).json({
@@ -27,36 +41,10 @@ router.post('/', protect, async (req, res) => {
       data: meeting
     });
   } catch (error) {
+    console.error('Unable to create meeting:', error.message);
     res.status(400).json({
       success: false,
-      message: error.message
-    });
-  }
-});
-
-// @desc    Get meeting by ID
-// @route   GET /api/meetings/:id
-// @access  Public (for guest joins)
-router.get('/:id', async (req, res) => {
-  try {
-    const meeting = await Meeting.findOne({ meetingId: req.params.id })
-      .populate('hostId', 'name email');
-
-    if (!meeting) {
-      return res.status(404).json({
-        success: false,
-        message: 'Meeting not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: meeting
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
+      message: 'Unable to create meeting'
     });
   }
 });
@@ -75,9 +63,46 @@ router.get('/history/my-meetings', protect, async (req, res) => {
       data: meetings
     });
   } catch (error) {
+    console.error('Unable to load meeting history:', error.message);
     res.status(400).json({
       success: false,
-      message: error.message
+      message: 'Unable to load meeting history'
+    });
+  }
+});
+
+// @desc    Get an active meeting by ID
+// @route   GET /api/meetings/:id
+// @access  Public (for guest joins)
+router.get('/:id', async (req, res) => {
+  try {
+    const meeting = await Meeting.findOne({
+      meetingId: normalizeMeetingId(req.params.id)
+    }).populate('hostId', 'name email');
+
+    if (!meeting) {
+      return res.status(404).json({
+        success: false,
+        message: 'Meeting not found'
+      });
+    }
+
+    if (!meeting.isActive) {
+      return res.status(410).json({
+        success: false,
+        message: 'Meeting has ended'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: meeting
+    });
+  } catch (error) {
+    console.error('Unable to load meeting:', error.message);
+    res.status(400).json({
+      success: false,
+      message: 'Unable to load meeting'
     });
   }
 });
@@ -87,7 +112,9 @@ router.get('/history/my-meetings', protect, async (req, res) => {
 // @access  Private (host only)
 router.post('/:id/end', protect, async (req, res) => {
   try {
-    const meeting = await Meeting.findOne({ meetingId: req.params.id });
+    const meeting = await Meeting.findOne({
+      meetingId: normalizeMeetingId(req.params.id)
+    });
 
     if (!meeting) {
       return res.status(404).json({
@@ -97,7 +124,7 @@ router.post('/:id/end', protect, async (req, res) => {
     }
 
     // Check if user is the host
-    if (meeting.hostId.toString() !== req.user.id) {
+    if (!isMeetingHost(meeting.hostId, req.user.id)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to end this meeting'
@@ -113,9 +140,10 @@ router.post('/:id/end', protect, async (req, res) => {
       data: meeting
     });
   } catch (error) {
+    console.error('Unable to end meeting:', error.message);
     res.status(400).json({
       success: false,
-      message: error.message
+      message: 'Unable to end meeting'
     });
   }
 });

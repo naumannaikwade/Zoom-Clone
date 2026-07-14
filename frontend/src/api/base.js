@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/endpoints';
 
 // Base API configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://xzoombackend.onrender.com/api',
+  baseURL: API_BASE_URL,
 });
 
 // Add token to all requests

@@ -8,16 +8,27 @@ const router=express.Router();
 //generate jwt token
 const generateToken=(id)=>{
     return jwt.sign({id},process.env.JWT_SECRET,{
-        expiresIn:process.env.JWT_EXPIRE,
+        expiresIn:process.env.JWT_EXPIRE || "7d",
     })
 };
+
+const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
 router.post("/register",async(req,res)=>{
     try{
-        const{name,email,password}=req.body;
+        const name=String(req.body.name || "").trim();
+        const email=normalizeEmail(req.body.email);
+        const password=String(req.body.password || "");
+
+        if (!name || !email || password.length < 6) {
+            return res.status(400).json({
+                success:false,
+                message:"name, a valid email, and a password of at least 6 characters are required"
+            });
+        }
 
         //check if user exists
         const userExists= await User.findOne({email});
@@ -47,9 +58,10 @@ router.post("/register",async(req,res)=>{
             });
         }
     } catch (error) {
+        console.error("Registration failed:", error.message);
         res.status(400).json({
             success:false,
-            message:error.message
+            message:"unable to register this account"
         });
     }
 })
@@ -59,7 +71,15 @@ router.post("/register",async(req,res)=>{
 // @access  Public
 router.post("/login",async(req,res)=>{
     try {
-        const {email,password}=req.body;
+        const email=normalizeEmail(req.body.email);
+        const password=String(req.body.password || "");
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success:false,
+                message:"email and password are required"
+            });
+        }
 
         //check for user
         const user=await User.findOne({email}).select("+password");
@@ -82,9 +102,10 @@ router.post("/login",async(req,res)=>{
         }
 
     } catch (error) {
+        console.error("Login failed:", error.message);
         res.status(400).json({
             success:false,
-            message:error.message,
+            message:"unable to sign in",
         })
     }
 })
@@ -102,9 +123,10 @@ router.get("/me",protect,async(req,res)=>{
             data:user
         });
     } catch (error) {
+        console.error("Unable to load current user:", error.message);
         res.status(400).json({
             success:false,
-            message:error.message
+            message:"unable to load the current user"
         });
     }
 })

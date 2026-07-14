@@ -15,6 +15,10 @@ const chatMessageSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  senderIsHost: {
+    type: Boolean,
+    default: false
+  },
   message: {
     type: String,
     required: true,
