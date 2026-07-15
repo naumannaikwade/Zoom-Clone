@@ -23,7 +23,7 @@ const features = [
 // const appUrl = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
 // Vercel deployment
-const appUrl = import.meta.env.VITE_APP_URL || 'https://xzoom.vercel.app';
+const appUrl = import.meta.env.VITE_APP_URL || 'https://xzoom-by-nauman.vercel.app';
 const registerUrl = new URL('/register', appUrl).toString();
 const loginUrl = new URL('/login', appUrl).toString();
 

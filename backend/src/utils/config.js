@@ -1,4 +1,5 @@
 const DEFAULT_ORIGINS = [
+  "https://xzoom-by-nauman.vercel.app",
   "https://xzoom.vercel.app",
   "http://localhost:3000",
   "http://localhost:5173",

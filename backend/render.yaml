@@ -15,4 +15,4 @@ services:
       - key: JWT_EXPIRE
         value: 7d
       - key: CORS_ORIGIN
-        value: https://xzoom.vercel.app
+        value: https://xzoom-by-nauman.vercel.app

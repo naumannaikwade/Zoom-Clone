@@ -60,7 +60,7 @@ Create the service from `backend/render.yaml` or configure the `backend` folder 
 
 - `MONGODB_URI`: the MongoDB connection string.
 - `JWT_SECRET`: a long random value.
-- `CORS_ORIGIN`: `https://xzoom.vercel.app`, the production frontend origin.
+- `CORS_ORIGIN`: `https://xzoom-by-nauman.vercel.app`, the production frontend origin.
 
 The active frontend configuration targets `https://xzoombackend.onrender.com` for both REST and Socket.IO traffic.
 
@@ -68,4 +68,4 @@ The active frontend configuration targets `https://xzoombackend.onrender.com` fo
 
 Import this GitHub repository and select `frontend` as the Root Directory. Vercel will use `frontend/vercel.json`, run the Vite build, publish `dist`, and route client-side URLs such as `/login` and `/meeting/:id` back to the application.
 
-The production frontend is available at `https://xzoom.vercel.app`. If Render was configured before this URL was added to `backend/render.yaml`, set `CORS_ORIGIN` to this exact origin in the Render dashboard and redeploy the backend.
+The production frontend is available at `https://xzoom-by-nauman.vercel.app`. If Render was configured before this URL was added to `backend/render.yaml`, set `CORS_ORIGIN` to this exact origin in the Render dashboard and redeploy the backend. The previous `https://xzoom.vercel.app` origin remains accepted for compatibility.
