@@ -62,7 +62,7 @@ Create the service from `backend/render.yaml` or configure the `backend` folder 
 - `JWT_SECRET`: a long random value.
 - `CORS_ORIGIN`: `https://xzoom-by-nauman.vercel.app`, the production frontend origin.
 
-The active frontend configuration targets `https://xzoombackend.onrender.com` for both REST and Socket.IO traffic.
+The active frontend configuration targets `https://xzoomclone-backend.onrender.com` for both REST and Socket.IO traffic.
 
 ### Frontend on Vercel
 

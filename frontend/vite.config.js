@@ -12,7 +12,7 @@ export default defineConfig({
         // target: "http://localhost:5000",
 
         // Render deployment
-        target: "https://xzoombackend.onrender.com",
+        target: "https://xzoomclone-backend.onrender.com",
         changeOrigin:true
       }
     }
